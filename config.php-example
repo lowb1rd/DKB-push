@@ -1,0 +1,5 @@
+<?php
+
+$kto = '12345678';
+$pin = 'secret';
+$boxcar_token = '';
