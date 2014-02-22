@@ -185,7 +185,7 @@ foreach ($accounts as $account) {
 	
 	for ($i = 0; $i < 5; $i++) { 		
 		$cur = isset($lines[CSV_HEADER_LINES+$i]) ? trim($lines[CSV_HEADER_LINES+$i]) : '';
-		if ($last != $cur) {
+		if ($cur && $last != $cur) {
 			$data = explode(';', $cur);
 			$data = array_map(function($e){return trim($e, '" ><');}, $data);
 			
