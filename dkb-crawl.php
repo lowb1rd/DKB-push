@@ -7,6 +7,7 @@ require('config.php');
 $url = 'https://banking.dkb.de';
 define('CSV_HEADER_LINES', 7);
 define('CSV_EC_COLUMN_DATE', 0);
+define('CSV_EC_COLUMN_DATE2', 1);
 define('CSV_EC_COLUMN_SUBJECT1', 3);
 define('CSV_EC_COLUMN_SUBJECT2', 4);
 define('CSV_EC_COLUMN_VALUE', 7);
@@ -40,6 +41,16 @@ function doCurlGet($path) {
 	return curl_exec($ch);
 }
 
+function findLineInCSV($line, $csv) {
+	foreach ($csv as $k => $v) {
+		if ($k < CSV_HEADER_LINES) continue;
+		if ($v == $line) {
+			return $k;
+		}
+	}
+
+	return false;
+}
 
 //
 // CURL init
@@ -111,7 +122,7 @@ foreach ($dom_->find('tr[class^=tablerow]') as $k => $row) {
 		$post_data[$e->name] = $e->value;
 		$post_data[$button->name] = $button->value;
 		$html = doCurlPost($form->action, $post_data);
-			
+
 		// download CSV
 		$post_data = array();
 		echo " - download CSV";		
@@ -170,26 +181,28 @@ $html = doCurlGet($url . $href);
 echo "Parse CSV\n";
 $push = array();
 foreach ($accounts as $account) {
+	$cnt = 0;
 	$lines = explode("\n", $account['csv']);
-	$last = '';
-	if (file_exists($file = __DIR__ . '/data/' . $account['nr'])) {
-		$arr = file($file);
-		if (count($arr) > CSV_HEADER_LINES)
-			$last = trim($arr[CSV_HEADER_LINES]);
-	}
+
+	$exists = file_exists($file = __DIR__ . '/data/' . $account['nr']);
+	$csv = $exists? file($file, FILE_IGNORE_NEW_LINES) : false;
 	file_put_contents($file, $account['csv']);
-	if (!$last) {
+	if (!$exists) {
 		// no push on first run. just save the csv for later comparison
 		continue;
 	}
-	
-	for ($i = 0; $i < 5; $i++) { 		
-		$cur = isset($lines[CSV_HEADER_LINES+$i]) ? trim($lines[CSV_HEADER_LINES+$i]) : '';
-		if ($cur && $last != $cur) {
-			$data = explode(';', $cur);
-			$data = array_map(function($e){return trim($e, '" ><');}, $data);
-			
-			echo $str = "    new entry: $cur\n";
+
+	foreach ($lines as $k => $line) {
+		if ($k < CSV_HEADER_LINES || !$line) continue;
+
+		$data = explode(';', $line);
+		$data = array_map(function($e){return trim($e, '" ><');}, $data);
+
+		$lineNbr = findLineInCSV($line, $csv);
+		if ($lineNbr === false) {
+			// push
+			if (++$cnt >= 5) break; // no more than 5 push messages per account per run
+			echo $str = "    new entry: $line\n";
 		
 			if ($account['type'] == 'ec') {
 				// Strip CC data out of Verwendungszweck
@@ -209,10 +222,12 @@ foreach ($accounts as $account) {
 					$data[CSV_CC_COLUMN_VALUE]
 				);
 			}
-		} else {
+		} else if ($account['type'] == 'cc' || $data[CSV_EC_COLUMN_DATE2]) {
+			// in the CSV file of EC cards, predated payments appear on top. Predated payments have an empty CSV_EC_COLUMN_DATE2 column.
+			// so we have to always look below them for possibly new transactions
 			break;
 		}
-	}	
+	}
 }
 
 //
