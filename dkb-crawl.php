@@ -1,6 +1,7 @@
 #!/usr/bin/php
 <?php
 
+chdir(__DIR__);
 require('simple_html_dom.php');
 require('config.php');
 
