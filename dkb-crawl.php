@@ -69,15 +69,18 @@ curl_setopt($ch, CURLOPT_CAINFO, 'cacert.pem');
 // LOGIN
 //
 echo 'Logging in...';
-$result = doCurlGet($url . '/portal/portal/');
+$result = doCurlGet($url . '/dkb/-');
+$dom = str_get_html($result);
+$redirect = $dom->find('a', 0)->href;
 
+$result = doCurlGet($redirect);
 $dom = str_get_html($result);
 $form = $dom->find('form', 0);
 
 $post_data = array();
 foreach ($form->find('input') as $elem) {	
-	if ($elem->class == 'il' && $elem->type == 'text') $elem->value = $kto;
-	if ($elem->class == 'il' && $elem->type == 'password') $elem->value = $pin;
+	if ($elem->name == 'j_username') $elem->value = $kto;
+	if ($elem->name == 'j_password') $elem->value = $pin;
 	
 	$post_data[$elem->name] = $elem->value;	
 }
@@ -98,22 +101,24 @@ $accounts = array();
 $matches = array();
 
 $dom_ = str_get_html($html_);
-foreach ($dom_->find('tr[class^=tablerow]') as $k => $row) {
+foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
+	if (!$k || $row->class == 'sum bgColor') continue;
 	// switch back to finanzstatus
-	if ($k) {
-		$href = $dom_->find('a[href*=%2Ffinanzstatus%2F]', 0)->href;
+	if ($k > 1) {
+		$href = $dom_->find('a[id=menu_0]', 0)->href;
 		doCurlGet($url . $href);
 	}
 	
 	// loop
 	$post_data = array();
-	
-	$nr = trim(strip_tags($row->find('td', 0)->find('strong', 0)->plaintext));
-	$desc = trim($row->find('td', 1)->find('span', 0)->plaintext);
+	$td = $row->find('td', 0);
+	if (!$td) continue;
+	$nr = trim(strip_tags($td->find('strong', 0)->plaintext));
+	$desc = trim($row->find('td', 1)->plaintext);
 	echo "  found '$desc' ($nr)";
-	$button = $row->find('td', 4)->find('input[value=Umsatzabfrage]', 0);
-	$ec = false;
-	if ($button) {
+	$button = $row->find('td', 3)->find('a[class=evt-creditCardDetails]', 0);
+	$ec = $button === NULL;
+	if (false ) {
 		// EC Card (POST)
 		$ec = true;
 		echo " - is EC";		
@@ -141,8 +146,8 @@ foreach ($dom_->find('tr[class^=tablerow]') as $k => $row) {
 		$csv = doCurlPost($form->action, $post_data);				
 	} else {
 		// Credit Card (GET)
-		echo " - is CC";
-		$href = $row->find('td', 4)->find('a', 0)->href;
+		echo $ec ? " - is EC" :  " - is CC";
+		$href = $row->find('td', 3)->find('a', 0)->href;
 		$html = doCurlGet($url . $href);
 		$dom = str_get_html($html);
 		
