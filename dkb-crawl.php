@@ -5,7 +5,7 @@ chdir(__DIR__);
 require('simple_html_dom.php');
 require('config.php');
 
-$url = 'https://banking.dkb.de';
+$url = 'https://www.dkb.de/';
 define('CSV_HEADER_LINES', 7);
 define('CSV_EC_COLUMN_DATE', 0);
 define('CSV_EC_COLUMN_DATE2', 1);
@@ -69,13 +69,9 @@ curl_setopt($ch, CURLOPT_CAINFO, 'cacert.pem');
 // LOGIN
 //
 echo 'Logging in...';
-$result = doCurlGet($url . '/dkb/-');
+$result = doCurlGet($url.'banking');
 $dom = str_get_html($result);
-$redirect = $dom->find('a', 0)->href;
-
-$result = doCurlGet($redirect);
-$dom = str_get_html($result);
-$form = $dom->find('form', 0);
+$form = $dom->find('form', 1);
 
 $post_data = array();
 foreach ($form->find('input') as $elem) {	
@@ -84,7 +80,7 @@ foreach ($form->find('input') as $elem) {
 	
 	$post_data[$elem->name] = $elem->value;	
 }
-$html_ = doCurlPost($form->action, $post_data);
+$html_ = doCurlPost('banking', $post_data);
 
 if (strpos($html_, 'Letzte Anmeldung:') !== false) {
 	echo "OK!\n";
@@ -101,70 +97,35 @@ $accounts = array();
 $matches = array();
 
 $dom_ = str_get_html($html_);
+$cnt = 0;
 foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
-	if (!$k || $row->class == 'sum bgColor') continue;
-	// switch back to finanzstatus
-	if ($k > 1) {
-		$href = $dom_->find('a[id=menu_0]', 0)->href;
-		doCurlGet($url . $href);
-	}
+	if ($row->class != 'mainRow') { continue; }
 	
 	// loop
-	$post_data = array();
 	$td = $row->find('td', 0);
 	if (!$td) continue;
-	$nr = trim(strip_tags($td->find('strong', 0)->plaintext));
-	$desc = trim($row->find('td', 1)->plaintext);
+
+	$desc = trim(strip_tags($td->find('div', 0)->plaintext));
+	$nr = trim($td->find('div', 1)->plaintext);
+	$nr = str_replace('*', '_', $nr);
+	$ec = strpos($td->find('div', 1)->class, 'iban') !== false;
+
+	if ($desc == 'Depot') break;
+	
 	echo "  found '$desc' ($nr)";
-	$button = $row->find('td', 3)->find('a[class=evt-creditCardDetails]', 0);
-	$ec = $button === NULL;
-	if (false ) {
-		// EC Card (POST)
-		$ec = true;
-		echo " - is EC";		
-		$form = $dom_->find('form', 2);
-		
-		$e = $form->find('input[type=hidden]', 0);
-		$post_data[$e->name] = $e->value;
-		$post_data[$button->name] = $button->value;
-		$html = doCurlPost($form->action, $post_data);
+	echo $ec ? " - is EC" :  " - is CC";
+	echo " - load Details";
+	$html = doCurlGet($url . 'banking/finanzstatus?$event=paymentTransaction&table=cashTable&row='.$cnt);
 
-		// download CSV
-		$post_data = array();
-		echo " - download CSV";		
-		$dom = str_get_html($html);
-		$form = $dom->find('form', 1);
-		
-		$e = $form->find('input[type=hidden]', 0);
-		$post_data[$e->name] = $e->value;
-		$button = $form->find('input[type=image]', 0);
-		$post_data[$button->name] = $button->value;
-		
-		$dom->clear(); 
-		unset($dom);
-
-		$csv = doCurlPost($form->action, $post_data);				
-	} else {
-		// Credit Card (GET)
-		echo $ec ? " - is EC" :  " - is CC";
-		$href = $row->find('td', 3)->find('a', 0)->href;
-		$html = doCurlGet($url . $href);
-		$dom = str_get_html($html);
-		
-		$href = $dom->find('a', 0)->href;
-		if ($href) {
-			$html = doCurlGet($href);
-			$dom = str_get_html($html);
-		}
-				
-		// download CSV
-		echo " - download CSV";
-		$href = $dom->find('a[href*=event=csvExport]', 0)->href;
-		$csv = doCurlGet($url . $href);
-	}
+	// download CSV
+	echo " - download CSV";
+	$ums = $ec ? 'kontoumsaetze' : 'kreditkartenumsaetze';
+	$csv = doCurlGet($url . 'banking/finanzstatus/'.$ums.'?$event=csvExport');
 	
 	$row->clear(); 
 	unset($row);
+
+	$cnt++;
 	
 	echo "\n";
 	$accounts[$nr] = ['desc' => $desc, 'csv' => $csv, 'nr' => $nr, 'type' => $ec?'ec':'cc'];
@@ -176,10 +137,7 @@ foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
 // Logout
 //
 echo "Logout!\n";
-$href = '/dkb/-?$part=DkbTransactionBanking.infobar.logout-button&$event=logout';
-$html = doCurlGet($url . $href);
-$href = '/dkb/-?$javascript=disabled&$part=Welcome.logout';
-$html = doCurlGet($url . $href);
+$html = doCurlGet($url . '/DkbTransactionBanking/banner.xhtml?$event=logout');
 
 //
 // Parse CSV
@@ -229,6 +187,7 @@ foreach ($accounts as $account) {
 				);
 			}
 		} else if ($account['type'] == 'cc' || $data[CSV_EC_COLUMN_DATE2]) {
+			// line found in old CSV .. we can stop here with this CSV
 			// in the CSV file of EC cards, predated payments appear on top. Predated payments have an empty CSV_EC_COLUMN_DATE2 column.
 			// so we have to always look below them for possibly new transactions
 			break;
@@ -250,9 +209,12 @@ foreach ($push as $k => $elem) {
 	
 	$title = $desc . ' ' . $value . ' Euro';
 	$message = '<b>'.$date . '</b><br>' . $subject . '<br><br><b style="color:'.$color.'">' . $value . ' Euro</b>'; 
+
+	// play sound only on first push
+	$sound = $k == 0 ? 'cash' : 'no-sound';
 	
-	$cmd = 'curl --silent -d "user_credentials='.$boxcar_token.'&notification[title]='.urlencode($title).'&notification[long_message]='.urlencode($message).'&notification[sound]=cash" https://new.boxcar.io/api/notifications';
-	echo $cmd;
+	$cmd = 'curl --silent -d "user_credentials='.$boxcar_token.'&notification[title]='.urlencode($title).'&notification[long_message]='.urlencode($message).'&notification[sound]='.$sound.'" https://new.boxcar.io/api/notifications';
+	//echo $cmd;
 	echo exec($cmd);
 	echo "\n";
 }
