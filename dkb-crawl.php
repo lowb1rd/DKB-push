@@ -5,7 +5,9 @@ chdir(__DIR__);
 require('simple_html_dom.php');
 require('config.php');
 
+$cachedir='cache';
 $url = 'https://www.dkb.de/';
+$cachedir = __DIR__.'/'.$cachedir.'/'; //make it relative to current dir
 define('CSV_HEADER_LINES', 7);
 define('CSV_EC_COLUMN_DATE', 0);
 define('CSV_EC_COLUMN_DATE2', 1);
@@ -60,8 +62,8 @@ $ch = curl_init();
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_COOKIESESSION, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_setopt($ch, CURLOPT_COOKIEFILE, 'data/cookie.txt');
-curl_setopt($ch, CURLOPT_COOKIEJAR, 'data/cookie.txt');
+curl_setopt($ch, CURLOPT_COOKIEFILE, $cachedir.'/cookie.txt');
+curl_setopt($ch, CURLOPT_COOKIEJAR, $cachedir.'/cookie.txt');
 //curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 curl_setopt($ch, CURLOPT_CAINFO, 'cacert.pem');
 
@@ -148,7 +150,8 @@ foreach ($accounts as $account) {
 	$cnt = 0;
 	$lines = explode("\n", $account['csv']);
 
-	$exists = file_exists($file = __DIR__ . '/data/' . $account['nr']);
+	if(!is_dir($cachedir)) mkdir($cachedir);
+	$exists = file_exists($file = $cachedir.$account['nr']);
 	$csv = $exists? file($file, FILE_IGNORE_NEW_LINES) : false;
 	file_put_contents($file, $account['csv']);
 	if (!$exists) {
