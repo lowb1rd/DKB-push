@@ -84,13 +84,14 @@ curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_COOKIEFILE, 'data/cookie.txt');
 curl_setopt($ch, CURLOPT_COOKIEJAR, 'data/cookie.txt');
 //curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-curl_setopt($ch, CURLOPT_CAINFO, 'cacert.pem');
+//curl_setopt($ch, CURLOPT_CAINFO, 'cacert.pem');
 
 //
 // LOGIN
 //
 echo 'Logging in...';
 $result = doCurlGet($url.'banking');
+
 $dom = str_get_html($result);
 $form = $dom->find('form', 1);
 
