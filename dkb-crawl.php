@@ -42,9 +42,30 @@ function doCurlGet($path) {
 	return curl_exec($ch);
 }
 
+function cleanLine($line) {
+	$synonyms = array(
+		'EINMAL LASTSCHRIFT' => 'Lastschrift',
+		'FOLGELASTSCHRIFT' => 'Lastschrift',
+		'GUTSCHRIFT' => 'Gutschrift',
+		'KARTENZAHLUNG/-ABRECHNUNG' => 'KARTENZAHLUNG',
+		'ONLINE-UEBERWEISUNG' => mb_convert_encoding('ÜBERWEISUNG', 'windows-1252', 'UTF-8'),
+	);
+	// clean out dynamic stuff ..
+	$line = preg_replace('#ABW(E|A)\+[^"]+#', '', $line);
+	$line = preg_replace('#\s+"#', '"', $line);
+	// stip out last column (ec: kundenreferenz/ cc:ursprünglicher betrag)
+	$line = preg_replace('#[^"]*";$#', '"', $line);
+	$line = str_ireplace(array_keys($synonyms), array_values($synonyms), $line);
+
+	return $line;
+}
+
 function findLineInCSV($line, $csv) {
+	$line = cleanLine($line);
 	foreach ($csv as $k => $v) {
 		if ($k < CSV_HEADER_LINES) continue;
+		$v = cleanLine($v);
+
 		if ($v == $line) {
 			return $k;
 		}
@@ -155,19 +176,24 @@ foreach ($accounts as $account) {
 		// no push on first run. just save the csv for later comparison
 		continue;
 	}
-
+	$first = true;
 	foreach ($lines as $k => $line) {
 		if ($k < CSV_HEADER_LINES || !$line) continue;
+		$first = false;
+		if (strpos($line, 'Auslandseinsatz') !== false) continue;
 
 		$data = explode(';', $line);
 		$data = array_map(function($e){return trim($e, '" ><');}, $data);
+		
+		// skip predated transaction
+		if ($account['type'] == 'ec' && !$data[CSV_EC_COLUMN_DATE2]) continue;
 
 		$lineNbr = findLineInCSV($line, $csv);
 		if ($lineNbr === false) {
 			// push
 			if (++$cnt >= 5) break; // no more than 5 push messages per account per run
 			echo $str = "    new entry: $line\n";
-		
+
 			if ($account['type'] == 'ec') {
 				// Strip CC data out of Verwendungszweck
 				$data[CSV_EC_COLUMN_SUBJECT2] = preg_replace('#(\d{4}) \d{4} \d{4} (\d{4})#', '$1 XXXX XXXX $2', $data[CSV_EC_COLUMN_SUBJECT2]);
@@ -186,10 +212,8 @@ foreach ($accounts as $account) {
 					$data[CSV_CC_COLUMN_VALUE]
 				);
 			}
-		} else if ($account['type'] == 'cc' || $data[CSV_EC_COLUMN_DATE2]) {
-			// line found in old CSV .. we can stop here with this CSV
-			// in the CSV file of EC cards, predated payments appear on top. Predated payments have an empty CSV_EC_COLUMN_DATE2 column.
-			// so we have to always look below them for possibly new transactions
+		} else {
+			// line found in old CSV .. we can stop here with this CSV			
 			break;
 		}
 	}
@@ -208,7 +232,7 @@ foreach ($push as $k => $elem) {
 	$color = $value[0] == '-' ? 'red' : 'green';
 	
 	$title = $desc . ' ' . $value . ' Euro';
-	$message = '<b>'.$date . '</b><br>' . $subject . '<br><br><b style="color:'.$color.'">' . $value . ' Euro</b>'; 
+	$message = '<b>'.$date . '</b><br>' . utf8_encode($subject) . '<br><br><b style="color:'.$color.'">' . $value . ' Euro</b>'; 
 
 	// play sound only on first push
 	$sound = $k == 0 ? 'cash' : 'no-sound';
