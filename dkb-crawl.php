@@ -130,7 +130,7 @@ foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
 	$desc = trim(strip_tags($td->find('div', 0)->plaintext));
 	$nr = trim($td->find('div', 1)->plaintext);
 	$nr = str_replace('*', '_', $nr);
-	$ec = strpos($td->find('div', 1)->class, 'iban') !== false;
+	$ec = strpos($td->find('div', 1)->plaintext, 'DE') !== false;
 
 	if ($desc == 'Depot') break;
 	
@@ -152,8 +152,6 @@ foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
 	echo "\n";
 	$accounts[$nr] = ['desc' => $desc, 'csv' => $csv, 'nr' => $nr, 'type' => $ec?'ec':'cc'];
 }
-
-#print_r($accounts);
 
 //
 // Logout
@@ -243,6 +241,3 @@ foreach ($push as $k => $elem) {
 	echo exec($cmd);
 	echo "\n";
 }
-?>
-
-
