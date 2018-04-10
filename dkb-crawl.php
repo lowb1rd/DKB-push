@@ -221,7 +221,7 @@ foreach ($accounts as $account) {
 //
 // Push
 //
-echo "PUSH via Boxcar\n";
+echo "PUSH via Pushover\n";
 foreach ($push as $k => $elem) {	
 	if ($k && $k%3 == 0) {
 		echo "Sleeping..\n";
@@ -234,10 +234,11 @@ foreach ($push as $k => $elem) {
 	$message = '<b>'.$date . '</b><br>' . utf8_encode($subject) . '<br><br><b style="color:'.$color.'">' . $value . ' Euro</b>'; 
 
 	// play sound only on first push
-	$sound = $k == 0 ? 'cash' : 'no-sound';
+	$sound = $k == 0 ? 'cashregister' : 'none';
+
+	exec($cmd = 'curl -s --form-string "token='.$pushover_token.'" --form-string "user='.$pushover_user.'" --form-string "html=1" --form-string "message='.$message.'" --form-string "sound='.$sound.'" --form-string "title='.$title.'" https://api.pushover.net/1/messages.json');
 	
-	$cmd = 'curl --silent -d "user_credentials='.$boxcar_token.'&notification[title]='.urlencode($title).'&notification[long_message]='.urlencode($message).'&notification[sound]='.$sound.'" https://new.boxcar.io/api/notifications';
-	//echo $cmd;
-	echo exec($cmd);
 	echo "\n";
+
+	
 }
