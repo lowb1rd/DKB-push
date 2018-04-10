@@ -137,7 +137,7 @@ foreach ($dom_->find('table[class=financialStatusTable] tr') as $k => $row) {
 	echo "  found '$desc' ($nr)";
 	echo $ec ? " - is EC" :  " - is CC";
 	echo " - load Details";
-	$html = doCurlGet($url . 'banking/finanzstatus?$event=paymentTransaction&row='.$cnt.'&group=0');
+	$html = doCurlGet($url . 'DkbTransactionBanking/content/banking/financialstatus/FinancialComposite/FinancialStatus.xhtml?$event=paymentTransaction&row='.$cnt.'&group=0');
 
 	// download CSV
 	echo " - download CSV";
